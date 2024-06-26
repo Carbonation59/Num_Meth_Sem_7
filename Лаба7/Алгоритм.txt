@@ -1,0 +1,180 @@
+#include <iostream>
+#include <vector>
+#include <cmath>
+#include <string>
+#include <algorithm>
+#include <map>
+#include <unordered_map>
+#include <queue>
+#include <stack>
+#include <numeric>
+#include <set>
+#include <cstdlib>
+#include <time.h>
+
+using namespace std;
+
+const double lx = acos(-1) / 2;
+const double ly = acos(-1) / 2;
+
+const double nx = 10;
+const double ny = 10;
+
+const double hx = lx / nx;
+const double hy = ly / ny;
+
+const double eps = 1e-6;
+const double omega = 1.25;
+
+const int cnt = 900;
+const int fix_x = 5;
+const int fix_y = 5;
+
+vector<vector<double>> start_values() {
+    vector<vector<double>> U(nx + 1, vector<double>(ny + 1));
+    for (int i = 0;i <= nx;i++) {
+        U[i][0] = exp(0. - (double(i) * hx)) * cos(double(i) * hx);
+    }
+    for (int j = 0;j <= ny;j++) {
+        U[0][j] = cos(double(j) * hy);
+    }
+    srand(time(0));
+    for (int i = 0;i <= nx;i++) {
+        for (int j = 0;j <= ny;j++) {
+            U[i][j] = rand();
+        }
+    }
+    return U;
+}
+
+vector<vector<double>> true_values() {
+    vector<vector<double>> U(nx + 1, vector<double>(ny + 1));
+    for (int i = 0;i <= nx;i++) {
+        for (int j = 0;j <= ny;j++) {
+            U[i][j] = exp(0. - (double(i) * hx)) * cos(double(i) * hx) * cos(double(j) * hy);
+        }
+    }
+    return U;
+}
+
+vector<vector<double>> new_values(vector<vector<double>> U_pred) {
+    vector<vector<double>> U(nx + 1, vector<double>(ny + 1));
+    for (int i = 0;i <= nx;i++) {
+        U[i][0] = exp(0. - (double(i) * hx)) * cos(double(i) * hx);
+    }
+    for (int j = 0;j <= ny;j++) {
+        U[0][j] = cos(double(j) * hy);
+    }
+    for (int i = 1;i < nx;i++) {
+        for (int j = 1;j < ny;j++) {
+            U[i][j] = ((U_pred[i + 1][j] - U_pred[i - 1][j]) / hx + (U_pred[i - 1][j] + U_pred[i + 1][j]) / hx / hx +
+                (U_pred[i][j + 1] + U_pred[i][j - 1]) / hx / hy) / (2. / hy / hy + 2. / hx / hx - 3.);
+        }
+    }
+    return U;
+}
+
+double get_norma(vector<vector<double>> U1, vector<vector<double>> U2) {
+    double mx = 0;
+    for (int i = 0;i <= nx;i++) {
+        for (int j = 0;j <= ny;j++) {
+            mx = max(mx, abs(U1[i][j] - U2[i][j]));
+        }
+    }
+    return mx;
+}
+
+vector<vector<double>> simp_iter_method(vector<vector<double>> U) {
+    vector<vector<double>> U_pred = U;
+    vector<vector<double>> U_new = new_values(U_pred);
+    vector<vector<double>> U_true = true_values();
+    double norma = get_norma(U_pred, U_new);
+    int k = 1;
+    //cout << get_norma(U_new, U_true) << '\n'; // в данном случае это ошибка
+    while (norma > eps) {
+        U_pred = U_new;
+        U_new = new_values(U_pred);
+        norma = get_norma(U_pred, U_new);
+        //cout << get_norma(U_new, U_true) << '\n';
+        k++;
+    }
+    cout << k << '\n';
+    return U_new;
+}
+
+vector<vector<double>> new_values_zeidel(vector<vector<double>> U_pred) {
+    vector<vector<double>> U(nx + 1, vector<double>(ny + 1));
+    for (int i = 0;i <= nx;i++) {
+        U[i][0] = exp(0. - (double(i) * hx)) * cos(double(i) * hx);
+    }
+    for (int j = 0;j <= ny;j++) {
+        U[0][j] = cos(double(j) * hy);
+    }
+    for (int i = 1;i < nx;i++) {
+        for (int j = 1;j < ny;j++) {
+            U[i][j] = ((U_pred[i + 1][j] - U[i - 1][j]) / hx + (U[i - 1][j] + U_pred[i + 1][j]) / hx / hx +
+                (U_pred[i][j + 1] + U[i][j - 1]) / hx / hy) / (2. / hy / hy + 2. / hx / hx - 3.);
+        }
+    }
+    return U;
+}
+
+vector<vector<double>> zeidel_method(vector<vector<double>> U) {
+    vector<vector<double>> U_pred = U;
+    vector<vector<double>> U_new = new_values_zeidel(U_pred);
+    vector<vector<double>> U_true = true_values();
+    double norma = get_norma(U_pred, U_new);
+    int k = 1;
+    //cout << get_norma(U_new, U_true) << '\n'; // в данном случае это ошибка
+    while (norma > eps) {
+        U_pred = U_new;
+        U_new = new_values_zeidel(U_pred);
+        norma = get_norma(U_pred, U_new);
+        //cout << get_norma(U_new, U_true) << '\n';
+        k++;
+    }
+    cout << k << '\n';
+    return U_new;
+}
+
+vector<vector<double>> relax(vector<vector<double>> U1, vector<vector<double>> U2) {
+    vector<vector<double>> U(nx + 1, vector<double>(ny + 1));
+    for (int i = 0;i <= nx;i++) {
+        for (int j = 0;j <= ny;j++) {
+            U[i][j] = omega * U1[i][j] + (1. - omega) * U2[i][j];
+        }
+    }
+    return U;
+}
+
+vector<vector<double>> simp_iter_method_relax(vector<vector<double>> U) {
+    vector<vector<double>> U_pred = U;
+    vector<vector<double>> U_new = new_values_zeidel(U_pred);
+    U_new = relax(U_new, U_pred);
+    vector<vector<double>> U_true = true_values();
+    double norma = get_norma(U_pred, U_new);
+    int k = 1;
+    //cout << get_norma(U_new, U_true) << '\n'; // в данном случае это ошибка
+    while (norma > eps) {
+        U_pred = U_new;
+        U_new = new_values_zeidel(U_pred);
+        U_new = relax(U_new, U_pred);
+        norma = get_norma(U_pred, U_new);
+        //cout << get_norma(U_new, U_true) << '\n';
+        k++;
+    }
+    cout << k << '\n';
+    return U_new;
+}
+
+
+int main() {
+    vector<vector<double>> U = start_values();
+    vector<vector<double>> UT = true_values();
+    cout << "Simple iteration method: ";
+    vector<vector<double>> U_sim = simp_iter_method(U);
+    cout << "Zeidel method: ";
+    vector<vector<double>> U_zel = zeidel_method(U);
+    cout << "Simple iteration method with upper relaxation: ";
+    vector<vector<double>> U_sim_x = simp_iter_method_relax(U);
+}

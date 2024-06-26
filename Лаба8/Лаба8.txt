@@ -1,0 +1,243 @@
+#include <iostream>
+#include <vector>
+#include <cmath>
+#include <string>
+#include <algorithm>
+#include <map>
+#include <unordered_map>
+#include <queue>
+#include <stack>
+#include <numeric>
+#include <set>
+
+using namespace std;
+
+const double nx = 10;
+const double lx = 1;
+const double hx = lx / nx;
+
+const double ny = 10;
+const double ly = 1;
+const double hy = ly / ny;
+
+const double nt = 10000;
+const double lt = 10;
+const double ht = lt / nt;
+
+
+
+double func(double x, double y, double t) {
+    return (-1) * x * y * sin(t);
+}
+
+vector<vector<vector<double>>> make_start() {
+    vector<vector<vector<double>>> start(nt + 1, vector<vector<double>>(nx + 1, vector<double>(ny + 1)));
+    for (int i = 0;i <= nx;i++) {
+        for (int j = 0;j <= ny;j++) {
+            start[0][i][j] = double(i) * hx * double(j) * hy;
+        }
+    }
+    return start;
+}
+
+
+vector<double> sweep_meth(vector<vector<double>> v, vector<double> b) {
+    int n = v.size();
+    double coef;
+    vector<double> ans(n);
+    for (int i = 0;i < n - 1;i++) {
+        coef = v[i + 1][i] / v[i][i];
+        for (int j = i; j < i + 2;j++) {
+            v[i + 1][j] = v[i + 1][j] - v[i][j] * coef;
+        }
+        b[i + 1] = b[i + 1] - b[i] * coef;
+    }
+    ans[n - 1] = b[n - 1] / v[n - 1][n - 1];
+    for (int i = n - 2;i > -1;i--) {
+        b[i] = b[i] - v[i][i + 1] * ans[i + 1];
+        ans[i] = b[i] / v[i][i];
+    }
+    return ans;
+}
+
+vector<vector<vector<double>>> true_values() {
+    vector<vector<vector<double>>> U(nt + 1, vector<vector<double>> (nx + 1, vector<double> (ny + 1)));
+    for (int k = 0;k <= nt;k++) {
+        for (int i = 0;i <= nx;i++) {
+            for (int j = 0;j <= ny;j++) {
+                U[k][i][j] = double(i) * hx * double(j) * hy * cos(double(k) * ht);
+            }
+        }
+    }
+    return U;
+}
+
+void put_finals1(vector<vector<double>> &U) {
+    for (int i = 0;i <= nx;i++) {
+        U[i][ny] = U[i][ny - 1] / (1. - hy);
+    }
+}
+
+void put_finals2(vector<vector<double>>& U) {
+    for (int j = 0;j <= ny;j++) {
+        U[nx][j] = U[nx - 1][j] / (1. - hx);
+    }
+}
+
+vector<vector<vector<double>>> MPN(vector<vector<vector<double>>> U) {
+    for (int k = 0; k < nt; k++) {
+        vector<vector<double>> A(nx + 1, vector<double>(nx + 1));
+        vector<vector<double>> U_half(nx + 1, vector<double>(ny + 1));
+        vector<double> tmp;
+        vector<double> b(nx + 1);
+        for (int j = 1;j < ny;j++) {
+            A[0][0] = 1.;
+            b[0] = 0.;
+
+            for (int i = 1; i < nx; i++) {
+                A[i][i - 1] = 0. - 1. / hx / hx;
+                A[i][i] = 2. / ht + 2. / hx / hx;
+                A[i][i + 1] = 0. - 1. / hx / hx;
+                b[i] = 2. * U[k][i][j] / ht + (U[k][i][j + 1] - 2. * U[k][i][j] + U[k][i][j - 1]) / hy / hy
+                    + func(double(i) * hx, double(j) * hy, ht * (double(k) + 0.5));
+            }
+
+            A[nx][nx] = (1. / hx - 1.);
+            A[nx][nx - 1] = -1. / hx;
+            b[nx] = 0.;
+
+            tmp = sweep_meth(A, b);
+
+            for (int q = 0;q <= nx;q++) {
+                U_half[q][j] = tmp[q];
+            }
+        }
+        put_finals1(U_half);
+        vector<vector<double>> A1(ny + 1, vector<double>(ny + 1));
+        vector<double> b1(ny + 1);
+        for (int i = 1;i < nx;i++) {
+            A1[0][0] = 1.;
+            b1[0] = 0.;
+
+            for (int j = 1; j < ny; j++) {
+                A1[j][j - 1] = 0. - 1. / hy / hy;
+                A1[j][j] = 2. / ht + 2. / hy / hy;
+                A1[j][j + 1] = 0. - 1. / hy / hy;
+                b1[j] = 2. * U_half[i][j] / ht + (U_half[i + 1][j] - 2. * U_half[i][j] + U_half[i - 1][j]) / hx / hx
+                    + func(double(i) * hx, double(j) * hy, ht * (double(k) + 0.5));
+            }
+
+            A1[ny][ny] = (1. / hy - 1.);
+            A1[ny][ny - 1] = -1. / hy;
+            b1[ny] = 0.;
+
+            tmp = sweep_meth(A1, b1);
+
+            U[k + 1][i] = tmp;
+        }
+        put_finals2(U[k + 1]);
+    }
+    return U;
+}
+
+vector<vector<vector<double>>> MDSH(vector<vector<vector<double>>> U) {
+    for (int k = 0; k < nt; k++) {
+        vector<vector<double>> A(nx + 1, vector<double>(nx + 1));
+        vector<vector<double>> U_half(nx + 1, vector<double>(ny + 1));
+        vector<double> tmp;
+        vector<double> b(nx + 1);
+        for (int j = 1;j < ny;j++) {
+            A[0][0] = 1.;
+            b[0] = 0.;
+
+            for (int i = 1; i < nx; i++) {
+                A[i][i - 1] = 0. - 1. / hx / hx;
+                A[i][i] = 1. / ht + 2. / hx / hx;
+                A[i][i + 1] = 0. - 1. / hx / hx;
+                b[i] = U[k][i][j] / ht + func(double(i) * hx, double(j) * hy, ht * double(k)) / 2.0;
+            }
+
+            A[nx][nx] = (1. / hx - 1.);
+            A[nx][nx - 1] = -1. / hx;
+            b[nx] = 0;
+
+            tmp = sweep_meth(A, b);
+
+            for (int q = 0;q <= nx;q++) {
+                U_half[q][j] = tmp[q];
+            }
+        }
+        put_finals1(U_half);
+        vector<vector<double>> A1(ny + 1, vector<double>(ny + 1));
+        vector<double> b1(ny + 1);
+        for (int i = 1;i < nx;i++) {
+            A1[0][0] = 1.;
+            b1[0] = 0.;
+
+            for (int j = 1; j < ny; j++) {
+                A1[j][j - 1] = 0. - 1. / hy / hy;
+                A1[j][j] = 1. / ht + 2. / hy / hy;
+                A1[j][j + 1] = 0. - 1. / hy / hy;
+                b1[j] = U_half[i][j] / ht + func(double(i) * hx, double(j) * hy, ht * double(k + 1)) / 2.0;
+            }
+
+            A1[ny][ny] = (1. / hy - 1.);
+            A1[ny][ny - 1] = -1. / hy;
+            b1[ny] = 0;
+
+            tmp = sweep_meth(A1, b1);
+
+            U[k + 1][i] = tmp;
+        }
+        put_finals2(U[k + 1]);
+    }
+    return U;
+}
+
+
+
+int main() {
+    vector<vector<vector<double>>> U = make_start();
+    vector<vector<vector<double>>> U1 = MPN(U);
+    vector<vector<vector<double>>> U2 = MDSH(U);
+    vector<vector<vector<double>>> U_true = true_values();
+    cout << fixed;
+    cout.precision(10);
+    cout << nt + 1 << ' ' << nx + 1 << ' ' << ny + 1 << '\n';
+    for (int i = 0;i <= nt;i++) {
+        cout << i * ht << ' ';
+    }
+    cout << '\n';
+    for (int i = 0;i <= nx;i++) {
+        cout << i * hx << ' ';
+    }
+    cout << '\n';
+    for (int i = 0;i <= ny;i++) {
+        cout << i * hy << ' ';
+    }
+    cout << '\n';
+    for (int k = 0;k <= nt;k++) {
+        for (int i = 0;i <= nx;i++) {
+            for (int j = 0;j <= ny;j++) {
+                cout << U_true[k][i][j] << ' ';
+            }
+        }
+        cout << '\n';
+    }
+    for (int k = 0;k <= nt;k++) {
+        for (int i = 0;i <= nx;i++) {
+            for (int j = 0;j <= ny;j++) {
+                cout << U1[k][i][j] << ' ';
+            }
+        }
+        cout << '\n';
+    }
+    for (int k = 0;k <= nt;k++) {
+        for (int i = 0;i <= nx;i++) {
+            for (int j = 0;j <= ny;j++) {
+                cout << U2[k][i][j] << ' ';
+            }
+        }
+        cout << '\n';
+    }
+}

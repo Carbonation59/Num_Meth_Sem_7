@@ -1,0 +1,421 @@
+#include <iostream>
+#include <vector>
+#include <cmath>
+#include <string>
+#include <algorithm>
+#include <map>
+#include <unordered_map>
+#include <queue>
+#include <stack>
+#include <numeric>
+#include <set>
+
+using namespace std;
+
+const double nx = 30;
+const double l = acos(-1.) / 2.;
+const double t = 10;
+
+const double a = 3;
+const double c = -2;
+const double sigma = 0.5;  // число Куранта
+const double omega = 0.5;  // схема Кранка-Николсона O(tau ^ 2 + h ^ 2)
+
+double h = l / nx;
+double tau = sigma * h * h / a;
+double nt = ceil(t / tau);
+
+
+double gamma(double T) {
+    return exp((c - a) * T);
+}
+
+vector<double> make_start() {
+    vector<double> zero_lvl(nx + 1);
+    for (int i = 0; i < nx + 1; i++) {
+        zero_lvl[i] = sin(i * h);
+    }
+    return zero_lvl;
+}
+
+vector<double> line_minus(vector<double> aa, vector<double> b, int k) {
+    double coef = aa[k] / b[k];
+    int st;
+    int fin;
+    if (k == 2) {
+        st = k - 2;
+        fin = k;
+    }
+    else {
+        st = k;
+        fin = k + 2;
+    }
+    for (int i = st;i <= fin;i++) {
+        aa[i] = aa[i] - b[i] * coef;
+    }
+    return aa;
+}
+
+
+vector<double> sweep_meth(vector<vector<double>> v, vector<double> b) {
+    int n = v.size();
+    double coef;
+    vector<double> ans(n);
+    for (int i = 0;i < n - 1;i++) {
+        coef = v[i + 1][i] / v[i][i];
+        for (int j = i; j < i + 2;j++) {
+            v[i + 1][j] = v[i + 1][j] - v[i][j] * coef;
+        }
+        b[i + 1] = b[i + 1] - b[i] * coef;
+    }
+    ans[n - 1] = b[n - 1] / v[n - 1][n - 1];
+    for (int i = n - 2;i > - 1;i--) {
+        b[i] = b[i] - v[i][i + 1] * ans[i + 1];
+        ans[i] = b[i] / v[i][i];
+    }
+    return ans;
+}
+
+vector<vector<double>> true_values() {
+    vector<vector<double>> U(nt + 1, vector<double>(nx + 1));
+    for (int i = 0;i < nt + 1;i++) {
+        for (int j = 0;j < nx + 1;j++) {
+            U[i][j] = exp((c - a) * i * tau) * sin(h * j);
+        }
+    }
+    return U;
+}
+
+//explicit
+
+vector<vector<double>> expl_meth_1(vector<double> zero_lvl) {
+    vector<vector<double>> U(nt + 1, vector<double>(nx + 1));
+    U[0] = zero_lvl;
+    for (int k = 0;k < nt;k++) {
+        for (int i = 1;i < nx;i++) {
+            U[k + 1][i] = U[k][i]  + a * tau * (U[k][i - 1]  - 2. * U[k][i] + U[k][i + 1]) / h / h  + c * tau * U[k][i];
+        }
+        U[k + 1][0] = U[k + 1][1] - h * gamma(double((k + 1)) * tau);
+        //U[k + 1][nx] = U[k + 1][nx - 1] + h * gamma(double((k + 1)) * tau);
+        U[k + 1][nx] = gamma(double((k + 1)) * tau);
+    }
+    return U;
+}
+
+vector<vector<double>> expl_meth_2(vector<double> zero_lvl) {
+    vector<vector<double>> U(nt + 1, vector<double>(nx + 1));
+    U[0] = zero_lvl;
+    for (int k = 0;k < nt;k++) {
+        for (int i = 1;i < nx;i++) {
+            U[k + 1][i] = U[k][i] + a * tau * (U[k][i - 1] - 2. * U[k][i] + U[k][i + 1]) / h / h + c * tau * U[k][i];
+        }
+        U[k + 1][0] = (4. * U[k + 1][1] - U[k + 1][2]) / 3.  -   2. * h / 3. * gamma((k + 1) * tau);
+        //U[k + 1][nx] = (4. * U[k + 1][nx - 1] - U[k + 1][nx - 2]) / 3.  +   2. * h / 3. * gamma((k + 1) * tau);
+        U[k + 1][nx] = gamma(double((k + 1)) * tau);
+    }
+    return U;
+}
+
+vector<vector<double>> expl_meth_3(vector<double> zero_lvl) {
+    vector<vector<double>> U(nt + 1, vector<double>(nx + 1));
+    U[0] = zero_lvl;
+    for (int k = 0;k < nt;k++) {
+        for (int i = 1;i < nx;i++) {
+            U[k + 1][i] = U[k][i] + a * tau * (U[k][i - 1] - 2. * U[k][i] + U[k][i + 1]) / h / h + c * tau * U[k][i];
+        }
+       // U[k + 1][0] = (gamma((k + 1) * tau)  -  (U[k][1] - U[k][0]) / h  +  (h * U[k][0]) / (2. * a * tau)) / (c * h / 2. / a - h / (2. * a * tau));
+       // U[k + 1][nx] = (gamma((k + 1) * tau)  -  (U[k][nx] - U[k][nx - 1]) / h + (h * U[k][nx]) / (2. * a * tau)) / (0. - c * h / 2. / a + h / (2. * a * tau));
+          U[k + 1][0] = (gamma((k + 1) * tau)  -  U[k][1] / h  +  U[k][0] * (h / (2. * a * tau) + 1. / h - c * h / 2. / a)) / (0. - h / (2. * a * tau));
+         // U[k + 1][nx] = (gamma((k + 1) * tau) + U[k][nx - 1] / h + U[k][nx] * (h / (2. * a * tau) - 1. / h + c * h / 2. / a)) / (h / (2. * a * tau));
+          U[k + 1][nx] = gamma(double((k + 1)) * tau);
+    }
+    return U;
+}
+
+
+//implicit
+
+vector<vector<double>> impl_meth_1(vector<double> zero_lvl) {
+    vector<vector<double>> U(nt + 1, vector<double>(nx + 1));
+    U[0] = zero_lvl;
+    vector<vector<double>> A(nx + 1, vector<double>(nx + 1));
+    vector<double> b(nx + 1);
+
+    for (int k = 0;k < nt;k++) {
+        A[0][0] = 1.;
+        A[0][1] = -1.;
+        b[0] = 0. - h * gamma((k + 1) * tau);
+
+        for (int i = 1; i < nx; i++) {
+            A[i][i - 1] = a / h / h;
+            A[i][i] = (c   -   2. * a / h / h  -  1. / tau);
+            A[i][i + 1] = a / h / h;
+            b[i] = 0 - 1. / tau * U[k][i];
+        }
+
+       /* A[nx][nx] = 1.;
+        A[nx][nx - 1] = -1.;
+        b[nx] = h * gamma((k + 1) * tau);*/
+
+        A[nx][nx] = 1.;
+        b[nx] = gamma((k + 1) * tau);
+
+        U[k + 1] = sweep_meth(A, b);
+    }
+    return U;
+}
+
+vector<vector<double>> impl_meth_2(vector<double> zero_lvl) {
+    vector<vector<double>> U(nt + 1, vector<double>(nx + 1));
+    U[0] = zero_lvl;
+    vector<vector<double>> A(nx + 1, vector<double>(nx + 1));
+    vector<double> b(nx + 1);
+
+    for (int k = 0;k < nt;k++) {
+        A[0][0] = 1.;
+        A[0][1] = -4. / 3.;
+        A[0][2] = 1. / 3.;
+        b[0] = 0  -  2. * h / 3. * gamma((k + 1) * tau);
+
+        for (int i = 1; i < nx; i++) {
+            A[i][i - 1] = a / h / h;
+            A[i][i] = (c  -  2. * a / h / h  -  1. / tau);
+            A[i][i + 1] = a / h / h;
+            b[i] = 0 - 1. / tau * U[k][i];
+        }
+
+        /*A[nx][nx] = 1.;
+        A[nx][nx - 1] = -4. / 3.;
+        A[nx][nx - 2] = 1. / 3.;
+        b[nx] = 2. * h / 3. * gamma((k + 1) * tau);*/
+
+        b[0] = b[0] - A[0][2] / A[1][2] * b[1];
+        //b[nx] = b[nx] - A[nx][nx - 2] / A[nx - 1][nx - 2] * b[nx - 1];
+
+        A[nx][nx] = 1.;
+        b[nx] = gamma((k + 1) * tau);
+
+        A[0] = line_minus(A[0], A[1], 2);
+        //A[nx] = line_minus(A[nx], A[nx - 1], nx - 2);
+
+        U[k + 1] = sweep_meth(A, b);
+    }
+    return U;
+}
+
+vector<vector<double>> impl_meth_3(vector<double> zero_lvl) {
+    vector<vector<double>> U(nt + 1, vector<double>(nx + 1));
+    U[0] = zero_lvl;
+    vector<vector<double>> A(nx + 1, vector<double>(nx + 1));
+    vector<double> b(nx + 1);
+
+    for (int k = 0;k < nt;k++) {
+        A[0][0] = c * h / 2.  -  1. / h  -  h / 2. / a / tau;
+        A[0][1] = 1. / h;
+        b[0] = gamma((k + 1) * tau)  +  U[k][0] * h / 2. / a / tau;
+
+        for (int i = 1; i < nx; i++) {
+            A[i][i - 1] = a / h / h;
+            A[i][i] = (c  -  2. * a / h / h  -  1. / tau);
+            A[i][i + 1] = a / h / h;
+            b[i] = 0 - 1. / tau * U[k][i];
+        }
+
+        /*A[nx][nx] = 0 - c * h / 2. + 1. / h + h / 2. / a / tau;
+        A[nx][nx - 1] = 0  -  1. / h;
+        b[nx] = gamma((k + 1) * tau)  +  U[k][nx] * h / 2. / a / tau;*/
+
+        A[nx][nx] = 1.;
+        b[nx] = gamma((k + 1) * tau);
+
+        U[k + 1] = sweep_meth(A, b);
+    }
+    return U;
+}
+
+// combined
+
+vector<vector<double>> comb_meth_1(vector<double> zero_lvl) {
+    vector<vector<double>> U(nt + 1, vector<double>(nx + 1));
+    U[0] = zero_lvl;
+    vector<vector<double>> A(nx + 1, vector<double>(nx + 1));
+    vector<double> b(nx + 1);
+
+    for (int k = 0;k < nt;k++) {
+        A[0][0] = 1.;
+        A[0][1] = -1.;
+        b[0] = 0. - h * gamma((k + 1) * tau);
+
+        for (int i = 1; i < nx; i++) {
+            A[i][i - 1] = omega * a / h / h;
+            A[i][i] =  omega * c  -  1. / tau  -  2. * omega * a / h / h;
+            A[i][i + 1] =  a * omega / h / h;
+            b[i] =  (omega - 1.) * (a * (U[k][i - 1] - 2. * U[k][i] + U[k][i + 1]) / h / h + c * U[k][i]) - U[k][i] / tau;
+        }
+
+        /*A[nx][nx] = 1.;
+        A[nx][nx - 1] = -1.;
+        b[nx] = h * gamma((k + 1) * tau);*/
+
+        A[nx][nx] = 1.;
+        b[nx] = gamma((k + 1) * tau);
+
+        U[k + 1] = sweep_meth(A, b);
+    }
+    return U;
+}
+
+vector<vector<double>> comb_meth_2(vector<double> zero_lvl) {
+    vector<vector<double>> U(nt + 1, vector<double>(nx + 1));
+    U[0] = zero_lvl;
+    vector<vector<double>> A(nx + 1, vector<double>(nx + 1));
+    vector<double> b(nx + 1);
+
+    for (int k = 0;k < nt;k++) {
+        A[0][0] = 1.;
+        A[0][1] = -4. / 3.;
+        A[0][2] = 1. / 3.;
+        b[0] = 0 - 2. * h / 3. * gamma((k + 1) * tau);
+
+        for (int i = 1; i < nx; i++) {
+            A[i][i - 1] = omega * a / h / h;
+            A[i][i] = omega * c - 1. / tau - 2. * omega * a / h / h;
+            A[i][i + 1] = a * omega / h / h;
+            b[i] = (omega - 1.) * (a * (U[k][i - 1] - 2. * U[k][i] + U[k][i + 1]) / h / h + c * U[k][i]) - U[k][i] / tau;
+        }
+
+        /*A[nx][nx] = 1.;
+        A[nx][nx - 1] = -4. / 3.;
+        A[nx][nx - 2] = 1. / 3.;
+        b[nx] = 2. * h / 3. * gamma((k + 1) * tau);*/
+
+        b[0] = b[0] - A[0][2] / A[1][2] * b[1];
+        //b[nx] = b[nx] - A[nx][nx - 2] / A[nx - 1][nx - 2] * b[nx - 1];
+
+        A[0] = line_minus(A[0], A[1], 2);
+
+        A[nx][nx] = 1.;
+        b[nx] = gamma((k + 1) * tau);
+
+        //A[nx] = line_minus(A[nx], A[nx - 1], nx - 2);
+
+        U[k + 1] = sweep_meth(A, b);
+    }
+    return U;
+}
+
+vector<vector<double>> comb_meth_3(vector<double> zero_lvl) {
+    vector<vector<double>> U(nt + 1, vector<double>(nx + 1));
+    U[0] = zero_lvl;
+    vector<vector<double>> A(nx + 1, vector<double>(nx + 1));
+    vector<double> b(nx + 1);
+
+    for (int k = 0;k < nt;k++) {
+        A[0][0] = c * h / 2. - 1. / h - h / 2. / a / tau;
+        A[0][1] = 1. / h;
+        b[0] = gamma((k + 1) * tau) + U[k][0] * h / 2. / a / tau;
+
+        for (int i = 1; i < nx; i++) {
+            A[i][i - 1] = omega * a / h / h;
+            A[i][i] = omega * c - 1. / tau - 2. * omega * a / h / h;
+            A[i][i + 1] = a * omega / h / h;
+            b[i] = (omega - 1.) * (a * (U[k][i - 1] - 2. * U[k][i] + U[k][i + 1]) / h / h + c * U[k][i]) - U[k][i] / tau;
+        }
+
+        /*A[nx][nx] = 0 - c * h / 2. + 1. / h + h / 2. / a / tau;
+        A[nx][nx - 1] = 0 - 1. / h;
+        b[nx] = gamma((k + 1) * tau) + U[k][nx] * h / 2. / a / tau;*/
+
+        A[nx][nx] = 1.;
+        b[nx] = gamma((k + 1) * tau);
+
+        U[k + 1] = sweep_meth(A, b);
+    }
+    return U;
+}
+
+
+int main() {
+    vector<double> zero_lvl = make_start();
+    vector<vector<double>> U;
+    cout << nt + 1 << ' ' << nx + 1 << '\n';
+    for (int i = 0;i < nx + 1;i++) {
+        cout << i * h << ' ';
+    }
+    cout << '\n';
+    for (int i = 0;i < nt + 1;i++) {
+        cout << i * tau << ' ';
+    }
+    cout << '\n';
+    U = true_values();
+    for (int i = 0;i < nt + 1;i++) {
+        for (int j = 0;j < nx + 1;j++) {
+            cout << U[i][j] << ' ';
+        }
+        cout << '\n';
+    }
+    U = expl_meth_1(zero_lvl);
+    for (int i = 0;i < nt + 1;i++) {
+        for (int j = 0;j < nx + 1;j++) {
+            cout << U[i][j] << ' ';
+        }
+        cout << '\n';
+    }
+    U = expl_meth_2(zero_lvl);
+    for (int i = 0;i < nt + 1;i++) {
+        for (int j = 0;j < nx + 1;j++) {
+            cout << U[i][j] << ' ';
+        }
+        cout << '\n';
+    }
+    U = expl_meth_3(zero_lvl);
+    for (int i = 0;i < nt + 1;i++) {
+        for (int j = 0;j < nx + 1;j++) {
+            cout << U[i][j] << ' ';
+        }
+        cout << '\n';
+    }
+    U = impl_meth_1(zero_lvl);
+    for (int i = 0;i < nt + 1;i++) {
+        for (int j = 0;j < nx + 1;j++) {
+            cout << U[i][j] << ' ';
+        }
+        cout << '\n';
+    }
+    U = impl_meth_2(zero_lvl);
+    for (int i = 0;i < nt + 1;i++) {
+        for (int j = 0;j < nx + 1;j++) {
+            cout << U[i][j] << ' ';
+        }
+        cout << '\n';
+    }
+    U = impl_meth_3(zero_lvl);
+    for (int i = 0;i < nt + 1;i++) {
+        for (int j = 0;j < nx + 1;j++) {
+            cout << U[i][j] << ' ';
+        }
+        cout << '\n';
+    }
+    U = comb_meth_1(zero_lvl);
+    for (int i = 0;i < nt + 1;i++) {
+        for (int j = 0;j < nx + 1;j++) {
+            cout << U[i][j] << ' ';
+        }
+        cout << '\n';
+    }
+    U = comb_meth_2(zero_lvl);
+    for (int i = 0;i < nt + 1;i++) {
+        for (int j = 0;j < nx + 1;j++) {
+            cout << U[i][j] << ' ';
+        }
+        cout << '\n';
+    }
+    U = comb_meth_3(zero_lvl);
+    for (int i = 0;i < nt + 1;i++) {
+        for (int j = 0;j < nx + 1;j++) {
+            cout << U[i][j] << ' ';
+        }
+        cout << '\n';
+    }
+
+}
